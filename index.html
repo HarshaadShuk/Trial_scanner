@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<title>Coupon Verifier</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#10202B" />
+<link rel="icon" href="icon-192.png" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+
+<style>
+  :root{
+    --bg:#10202B;
+    --surface:#17313A;
+    --surface-2:#1E3A44;
+    --text:#EAF2F1;
+    --muted:#8FA8AC;
+    --accent:#F2B705;
+    --success:#3FA34D;
+    --danger:#D64545;
+    --warning:#E8952F;
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ height:100%; margin:0; overscroll-behavior:none; }
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',system-ui,sans-serif;
+    display:flex;
+    flex-direction:column;
+    height:100dvh;
+    width:100vw;
+    overflow:hidden;
+  }
+
+  header{
+    padding: calc(env(safe-area-inset-top,0px) + 14px) 18px 12px;
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:12px;
+    z-index:5;
+  }
+  header h1{
+    font-family:'Fraunces',serif;
+    font-weight:600;
+    font-size:20px;
+    margin:0;
+    letter-spacing:0.2px;
+  }
+  header .tally{
+    display:flex;
+    gap:14px;
+    font-size:12px;
+    color:var(--muted);
+  }
+  header .tally b{ color:var(--text); font-weight:600; }
+
+  #reader-wrap{
+    position:relative;
+    flex:1;
+    margin:0 14px 14px;
+    border-radius:20px;
+    overflow:hidden;
+    background:#000;
+    border:1px solid rgba(242,183,5,0.18);
+  }
+  #reader{ width:100%; height:100%; }
+  #reader video{ width:100% !important; height:100% !important; object-fit:cover; }
+
+  /* hide the library's default chrome, we draw our own */
+  #reader__scan_region img{ display:none; }
+  #reader__dashboard{ display:none !important; }
+  #reader__header_message { display:none !important; }
+
+  .reticle{
+    position:absolute;
+    inset:14% 12%;
+    pointer-events:none;
+    z-index:3;
+  }
+  .corner{
+    position:absolute;
+    width:34px; height:34px;
+    border:3px solid var(--accent);
+  }
+  .corner.tl{ top:0; left:0; border-right:none; border-bottom:none; border-top-left-radius:10px; }
+  .corner.tr{ top:0; right:0; border-left:none; border-bottom:none; border-top-right-radius:10px; }
+  .corner.bl{ bottom:0; left:0; border-right:none; border-top:none; border-bottom-left-radius:10px; }
+  .corner.br{ bottom:0; right:0; border-left:none; border-top:none; border-bottom-right-radius:10px; }
+
+  .hint{
+    position:absolute;
+    bottom:16px; left:0; right:0;
+    text-align:center;
+    font-size:13px;
+    color:rgba(234,242,241,0.75);
+    z-index:3;
+    pointer-events:none;
+  }
+
+  #torch-btn{
+    position:absolute;
+    top:14px; right:14px;
+    z-index:6;
+    background:rgba(16,32,43,0.65);
+    border:1px solid rgba(242,183,5,0.35);
+    color:var(--text);
+    border-radius:12px;
+    padding:9px 12px;
+    font-size:12px;
+    font-family:'Inter',sans-serif;
+    display:none;
+  }
+  #torch-btn.show{ display:block; }
+  #torch-btn.on{ background:var(--accent); color:#10202B; border-color:var(--accent); }
+
+  footer{
+    padding: 10px 18px calc(env(safe-area-inset-bottom,0px) + 14px);
+    text-align:center;
+    font-size:11px;
+    color:var(--muted);
+  }
+
+  /* --- Result overlay --- */
+  #overlay{
+    position:fixed;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    padding:32px;
+    z-index:20;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity 160ms ease;
+  }
+  #overlay.show{ opacity:1; pointer-events:auto; }
+  #overlay.verified{ background:var(--success); color:#0E2412; }
+  #overlay.already_used{ background:var(--danger); color:#2B0B0B; }
+  #overlay.not_found{ background:var(--warning); color:#2A1704; }
+  #overlay.error{ background:var(--surface-2); color:var(--text); }
+  #overlay.checking{ background:rgba(16,32,43,0.92); color:var(--text); }
+
+  .ov-icon{ font-size:56px; line-height:1; margin-bottom:14px; }
+  .ov-status{
+    font-family:'Fraunces',serif;
+    font-weight:700;
+    font-size:34px;
+    margin:0 0 8px;
+  }
+  .ov-message{ font-size:15px; max-width:320px; opacity:0.9; margin:0 0 4px; }
+  .ov-row{ font-size:12px; opacity:0.7; margin-top:4px; }
+  .ov-dismiss{ font-size:12px; margin-top:26px; opacity:0.65; }
+
+  .spinner{
+    width:26px; height:26px;
+    border-radius:50%;
+    border:3px solid rgba(255,255,255,0.25);
+    border-top-color:var(--accent);
+    animation:spin 0.8s linear infinite;
+    margin-bottom:16px;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  /* --- Setup banner (shown until SCRIPT_URL is configured) --- */
+  #setup{
+    position:fixed; inset:0; z-index:30;
+    background:var(--bg);
+    display:flex; align-items:center; justify-content:center;
+    padding:28px;
+  }
+  #setup .card{
+    max-width:380px;
+    background:var(--surface);
+    border-radius:18px;
+    padding:26px 24px;
+    border:1px solid rgba(242,183,5,0.2);
+  }
+  #setup h2{ font-family:'Fraunces',serif; font-size:22px; margin:0 0 10px; font-weight:600; }
+  #setup p{ font-size:14px; color:var(--muted); line-height:1.55; margin:0 0 10px; }
+  #setup code{
+    background:var(--surface-2); color:var(--accent);
+    padding:2px 6px; border-radius:6px; font-size:13px;
+  }
+  #setup .input-row{ margin-top:16px; }
+  #setup input{
+    width:100%;
+    background:var(--surface-2);
+    border:1px solid rgba(242,183,5,0.25);
+    color:var(--text);
+    border-radius:10px;
+    padding:11px 12px;
+    font-size:13px;
+    font-family:'Inter',sans-serif;
+  }
+  #setup button{
+    margin-top:12px;
+    width:100%;
+    background:var(--accent);
+    color:#10202B;
+    border:none;
+    border-radius:10px;
+    padding:12px;
+    font-weight:700;
+    font-size:14px;
+    font-family:'Inter',sans-serif;
+  }
+  #setup .err{ color:var(--danger); font-size:12px; margin-top:8px; min-height:16px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Coupon Verifier</h1>
+  <div class="tally">
+    <span>Verified <b id="t-verified">0</b></span>
+    <span>Used <b id="t-used">0</b></span>
+    <span>Unknown <b id="t-unknown">0</b></span>
+  </div>
+</header>
+
+<div id="reader-wrap">
+  <div id="reader"></div>
+  <button id="torch-btn">Flash: Off</button>
+  <div class="reticle">
+    <div class="corner tl"></div>
+    <div class="corner tr"></div>
+    <div class="corner bl"></div>
+    <div class="corner br"></div>
+  </div>
+  <div class="hint">Point the camera at a coupon QR code</div>
+</div>
+
+<footer>Session-only tally · resets on reload</footer>
+
+<div id="overlay">
+  <div class="ov-icon" id="ov-icon">✓</div>
+  <p class="ov-status" id="ov-status">VERIFIED</p>
+  <p class="ov-message" id="ov-message">Coupon verified and marked used.</p>
+  <p class="ov-row" id="ov-row"></p>
+  <p class="ov-dismiss">Tap anywhere to scan the next one</p>
+</div>
+
+<div id="setup">
+  <div class="card">
+    <h2>One-time setup</h2>
+    <p>Paste the web address of your Google Apps Script backend below. You only need to do this once — it's saved on this device.</p>
+    <p>Don't have it yet? Follow the steps in <code>README.md</code> to deploy the backend and get this URL first.</p>
+    <div class="input-row">
+      <input id="setup-url" type="text" placeholder="https://script.google.com/macros/s/.../exec" />
+      <button id="setup-save">Save & Start Scanning</button>
+      <div class="err" id="setup-err"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'coupon_verifier_script_url';
+let SCRIPT_URL = localStorage.getItem(STORAGE_KEY) || '';
+
+const setupEl = document.getElementById('setup');
+const setupInput = document.getElementById('setup-url');
+const setupErr = document.getElementById('setup-err');
+
+function isValidScriptUrl(u) {
+  return /^https:\/\/script\.google\.com\/macros\/s\/.+\/exec\/?$/.test(u.trim());
+}
+
+function showSetup() {
+  setupEl.style.display = 'flex';
+}
+function hideSetup() {
+  setupEl.style.display = 'none';
+}
+
+if (!SCRIPT_URL) {
+  showSetup();
+} else {
+  hideSetup();
+  startScanner();
+}
+
+document.getElementById('setup-save').addEventListener('click', () => {
+  const val = setupInput.value.trim();
+  if (!isValidScriptUrl(val)) {
+    setupErr.textContent = 'That doesn\'t look like a valid Apps Script /exec URL.';
+    return;
+  }
+  SCRIPT_URL = val;
+  localStorage.setItem(STORAGE_KEY, val);
+  hideSetup();
+  startScanner();
+});
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+
+const overlay = document.getElementById('overlay');
+const ovIcon = document.getElementById('ov-icon');
+const ovStatus = document.getElementById('ov-status');
+const ovMessage = document.getElementById('ov-message');
+const ovRow = document.getElementById('ov-row');
+
+let tally = { verified: 0, used: 0, unknown: 0 };
+const tEl = {
+  verified: document.getElementById('t-verified'),
+  used: document.getElementById('t-used'),
+  unknown: document.getElementById('t-unknown'),
+};
+
+let scanner = null;
+let busy = false;
+let lastCode = null;
+let lastCodeAt = 0;
+const RESCAN_COOLDOWN_MS = 2600;
+
+function beep(kind) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.type = 'sine';
+    if (kind === 'good') { o.frequency.value = 880; }
+    else if (kind === 'bad') { o.frequency.value = 220; }
+    else { o.frequency.value = 440; }
+    g.gain.setValueAtTime(0.001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+    o.start();
+    o.stop(ctx.currentTime + 0.24);
+  } catch (e) {}
+}
+
+function vibrate(pattern) {
+  if (navigator.vibrate) navigator.vibrate(pattern);
+}
+
+function showOverlay(kind, icon, status, message, row) {
+  const spinner = overlay.querySelector('.spinner');
+  if (spinner) spinner.remove();
+  ovIcon.style.display = '';
+  overlay.className = kind + ' show';
+  ovIcon.textContent = icon;
+  ovStatus.textContent = status;
+  ovMessage.textContent = message;
+  ovRow.textContent = row ? ('Sheet row ' + row) : '';
+}
+
+function hideOverlay() {
+  overlay.className = '';
+}
+
+function updateTally() {
+  tEl.verified.textContent = tally.verified;
+  tEl.used.textContent = tally.used;
+  tEl.unknown.textContent = tally.unknown;
+}
+
+async function verifyToken(token) {
+  const res = await fetch(SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids CORS preflight against Apps Script
+    body: JSON.stringify({ token: token }),
+  });
+  if (!res.ok) throw new Error('Network error (' + res.status + ')');
+  return res.json();
+}
+
+async function onDecoded(text) {
+  const now = Date.now();
+  if (text === lastCode && (now - lastCodeAt) < RESCAN_COOLDOWN_MS) return;
+  if (busy) return;
+  busy = true;
+  lastCode = text;
+  lastCodeAt = now;
+
+  overlay.className = 'checking show';
+  ovStatus.textContent = 'Checking…';
+  ovMessage.textContent = 'Verifying against the sheet';
+  ovRow.textContent = '';
+  ovIcon.style.display = 'none';
+  const spinner = document.createElement('div');
+  spinner.className = 'spinner';
+  overlay.insertBefore(spinner, ovIcon);
+
+  try {
+    const data = await verifyToken(text);
+
+    if (data.status === 'verified') {
+      tally.verified++; updateTally();
+      vibrate([40, 60, 40]); beep('good');
+      showOverlay('verified', '✓', 'VERIFIED', data.message || 'Coupon verified and marked used.', data.row);
+    } else if (data.status === 'already_used') {
+      tally.used++; updateTally();
+      vibrate([120]); beep('bad');
+      showOverlay('already_used', '✕', 'ALREADY USED', data.message || 'This coupon was already redeemed.', data.row);
+    } else if (data.status === 'not_found') {
+      tally.unknown++; updateTally();
+      vibrate([30, 40, 30, 40, 30]); beep('warn');
+      showOverlay('not_found', '?', 'NOT FOUND', data.message || 'This code is not in the sheet.', '');
+    } else {
+      vibrate([120]); beep('bad');
+      showOverlay('error', '!', 'ERROR', data.message || 'Something went wrong.', '');
+    }
+  } catch (err) {
+    vibrate([120]);
+    beep('bad');
+    showOverlay('error', '!', 'CONNECTION ERROR', 'Could not reach the sheet. Check your internet connection and try again.', '');
+  }
+  busy = false;
+}
+
+overlay.addEventListener('click', () => {
+  if (overlay.classList.contains('checking')) return;
+  hideOverlay();
+});
+
+function startScanner() {
+  if (scanner) return;
+  scanner = new Html5Qrcode('reader', { verbose: false });
+  const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
+
+  scanner.start(
+    { facingMode: 'environment' },
+    config,
+    (decodedText) => { onDecoded(decodedText); },
+    () => { /* ignore per-frame scan misses */ }
+  ).then(() => {
+    setupTorch();
+  }).catch((err) => {
+    document.querySelector('.hint').textContent = 'Camera access denied — allow camera permission and reload.';
+  });
+}
+
+function setupTorch() {
+  const btn = document.getElementById('torch-btn');
+  try {
+    const capabilities = scanner.getRunningTrackCapabilities ? scanner.getRunningTrackCapabilities() : null;
+    if (capabilities && capabilities.torch) {
+      btn.classList.add('show');
+      let on = false;
+      btn.addEventListener('click', async () => {
+        on = !on;
+        await scanner.applyVideoConstraints({ advanced: [{ torch: on }] });
+        btn.textContent = 'Flash: ' + (on ? 'On' : 'Off');
+        btn.classList.toggle('on', on);
+      });
+    }
+  } catch (e) { /* torch not supported on this device/browser */ }
+}
+</script>
+</body>
+</html>
