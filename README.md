@@ -63,12 +63,15 @@ Do **not** try to open `index.html` directly from your phone's file manager (`fi
 
 ---
 
+The Apps Script URL is already baked into `index.html` — there's no setup screen, it opens straight to the camera.
+
+> If you ever redeploy the backend and get a *new* URL, open `index.html`, find the line starting with `const SCRIPT_URL` near the top of the `<script>` block, and update it there.
+
 ## Part 4 — Install on Android
 
 1. On your Android phone, open the hosted URL in **Chrome**.
-2. The app will show a **"One-time setup"** card. Paste the Web app URL from Part 2 into the box and tap **Save & Start Scanning**. It's saved on the device — you won't see this screen again.
-3. Allow camera access when Chrome asks.
-4. Tap Chrome's **⋮ menu → Add to Home screen → Install**. This adds a real app icon and opens full-screen, no browser bar, like a native app.
+2. Allow camera access when Chrome asks.
+3. Tap Chrome's **⋮ menu → Add to Home screen → Install**. This adds a real app icon and opens full-screen, no browser bar, like a native app.
 
 That's it — you now have an installable Android app that scans a coupon, checks it live against your sheet, and marks it used, with no APK, no Play Store, and no server bill.
 
